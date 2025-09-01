@@ -64,7 +64,7 @@ if all_holders:
     hashed_addresses = [keccak256_hash(addr) for addr in sorted_addresses]
     
     # Build the Merkle tree
-    merkle_tree = MerkleTree(hashed_addresses)]
+    merkle_tree = MerkleTree[(hashed_addresses)]
     merkle_root = merkle_tree.rootHash.hex()
     
     print(f"\nMerkle Root: {merkle_root}")
