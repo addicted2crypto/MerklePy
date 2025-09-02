@@ -12,4 +12,4 @@ print(web3.is_connected())
 print(web3.eth.block_number)
 
 balance = web3.eth.get_balance("0x616767179c5305a89f13348134C681061Cf0bA9e")
-print(web3.from_wei(balance, 'ether'))
+print(web3.from_wei(balance, 'ether')) #even avax is called ether thats cool
