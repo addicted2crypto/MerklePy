@@ -2,7 +2,7 @@ import os
 import json
 from web3 import Web3
 
-infura_url ="Never Push This Ish to Github"
+infura_url ="NOSHARINGWILLENV"
 # os.getenv("INFURA_URL")
 AVAX_RPC_URL = "https://api.avax.network/ext/bc/C/rpc" 
 w3 = Web3(Web3.HTTPProvider(AVAX_RPC_URL))
@@ -11,7 +11,8 @@ print(web3.is_connected())
 
 print(web3.eth.block_number)
 
-balance = web3.eth.get_balance("0x455bF23eA7575A537b6374953FA71B5F3653272c") #FAKE PHISHING BULLSHIT ASSHOLE
+balance = web3.eth.get_balance("0x19Fa72D9D076668CeD11399BaE149F916938BD8D") #another PHISSHING address
+("0x455bF23eA7575A537b6374953FA71B5F3653272c") #FAKE PHISHING BULLSHIT ASSHOLE
 print(web3.from_wei(balance, 'ether')) #even avax is called ether thats cool
 # print(web3.eth.get_proof('latest', [0], True))
 
