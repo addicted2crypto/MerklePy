@@ -2,8 +2,9 @@ import os
 import json
 from web3 import Web3
 
-infura_url ="NOSHARINGWILLENV"
-# os.getenv("INFURA_URL")
+from dotenv import load_dotenv
+load_dotenv()
+infura_url = os.getenv("INFURA_URL")
 AVAX_RPC_URL = "https://api.avax.network/ext/bc/C/rpc" 
 w3 = Web3(Web3.HTTPProvider(AVAX_RPC_URL))
 web3 = Web3(Web3.HTTPProvider(infura_url))
