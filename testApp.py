@@ -17,31 +17,39 @@ print(w3.eth.block_number)
 AVAX_balance = w3.eth.get_balance("0x134A48C4Bc6c4C658bd7416A298498da146bbF0A") #Avax 
 print(w3.from_wei(AVAX_balance, 'ether'))
 
-phising_addresses =["0x19Fa72D9D076668CeD11399BaE149F916938BD8D","0x455bF23eA7575A537b6374953FA71B5F3653272c" ] #will add addresses to watch here
+phishing_addresses =["0x19Fa72D9D076668CeD11399BaE149F916938BD8D","0x455bF23eA7575A537b6374953FA71B5F3653272c" ] #will add addresses to watch here
 print(web3.is_connected())
 
 print(web3.eth.block_number)
 
+processed_transactions = set()
+
 def handle_transaction(transaction):
+    value = web3.from_wei(transaction.get("value", 0), 'ether')
+    print(f"Phishing address detected: {transaction['from']} -> {transaction['to']}, Value: {value} ETH")
 
-    if transaction["from"] in phising_addresses or transaction["to"] in phising_addresses:
-        print(f"Phishing address detected: {transaction['from']} -> {transaction['to']}")
+    from_balance = 0
+    to_balance = 0
 
+    if transaction["from"] in phishing_addresses: from_balance = web3.from_wei(web3.eth.get_balance(transaction["from"]), "ether")
+    print(f"Current balance of phishing sender wallet: {transaction['from']}, {web3.from_wei(from_balance, 'ether')} ETH")
+    if transaction["to"] in phishing_addresses: to_balance = web3.from_wei(web3.eth.get_balance(transaction["to"]), "ether")
+    print(f"Current balance of phishing receiver wallet: {transaction['to']}, {web3.from_wei(to_balance, 'ether')} ETH")
+    processed_transactions.add(transaction["hash"])
 block_filter = web3.eth.filter('latest')
 print(block_filter)
-print(phising_addresses.balance.from_wei('ether', ether))
 while True:
     block_number = web3.eth.block_number
     transactions = web3.eth.get_block(block_number, full_transactions=True).transactions
 
-    for transactions in transactions:
-        handle_transaction(transactions)
+    for transaction in transactions:
+        handle_transaction(transaction)
 
     time.sleep(1)    
-balance = web3.eth.get_balance(phising_addresses) #another PHISSHING address
-#FAKE PHISHING BULLSHIT ASSHOLE
-print(web3.from_wei(balance, 'ether')) #even avax is called ether thats cool
-# print(web3.eth.get_proof('latest', [0], True))
+for address in phishing_addresses:
+    balance = web3.eth.get_balance(address)
+    print(f"Balance of {address}: {web3.from_wei(balance, 'ether')}")
+
 
 
 
