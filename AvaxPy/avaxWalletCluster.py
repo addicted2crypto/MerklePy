@@ -49,7 +49,7 @@ for wallet in wallet_balances:
 start_block = w3.eth.block_number - 20
 end_block = w3.eth.block_number
 
-print(f"--- Counting AVAX transfers between cluster wallets from block {start_block} to {end_block} ---\n")
+print(f"--- Caculating AVAX transfers between cluster wallets from block {start_block} to {end_block} ---\n")
 
 for block_num in range(start_block, end_block + 1):
     try: 
