@@ -46,7 +46,7 @@ for wallet in wallet_balances:
 
     transfer_count = 0
     found_transfers = False
-start_block = w3.eth.block_number - 20
+start_block = w3.eth.block_number - 200
 end_block = w3.eth.block_number
 
 print(f"--- Caculating AVAX transfers between cluster wallets from block {start_block} to {end_block} ---\n")
