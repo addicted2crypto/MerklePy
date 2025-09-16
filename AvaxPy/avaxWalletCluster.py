@@ -76,7 +76,7 @@ for block_num in range(start_block, end_block + 1):
         print(f"Error processing block {block_num}: {e}")
 
 
-    time.sleep(.5)
+    time.sleep(.05)
 if not found_transfers:
     print(f"No transfers between cluster wallets found in blocks {start_block} to {end_block}.\n")
 
