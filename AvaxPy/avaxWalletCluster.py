@@ -30,6 +30,7 @@ print("--- Checking Wallet Balances ---\n")
 
 for wallet in avax_wallet_cluster:
     try:
+        # Get balance in wei and convert to AVAX
         balaace_in_avax = w3.eth.get_balance(wallet)
 
         balance_in_avax = w3.from_wei(balaace_in_avax, 'ether')
