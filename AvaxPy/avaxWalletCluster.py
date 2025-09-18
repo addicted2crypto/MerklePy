@@ -63,7 +63,7 @@ for block_num in range(start_block, end_block + 1):
              tx_to = tx.get('to')
 
              if tx_from in cluster_wallet_set and tx_to in cluster_wallet_set:
-                if tx_get('input') == '0x':
+                if tx.get('input') == '0x':
                     transfer_count += 1
                     print(f"Transfer found in block {block_num}: {tx_from} -> {tx_to}")
 
