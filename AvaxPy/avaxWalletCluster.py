@@ -2,6 +2,7 @@ from decimal import Decimal
 from web3.middleware import ExtraDataToPOAMiddleware
 from web3 import Web3
 
+# --- Connection ---
 AVAX_RPC_URL = "https://api.avax.network/ext/bc/C/rpc"
 w3 = Web3(Web3.HTTPProvider(AVAX_RPC_URL))
 w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
@@ -10,8 +11,8 @@ if not w3.is_connected():
     raise ConnectionError("❌ Failed to connect to AVAX network")
 print(f"✅ Connected to Avalanche C-Chain at block {w3.eth.block_number}")
 
-# --- ERC20 Setup ---
-TOKEN_ADDRESS = Web3.to_checksum_address("0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664")  # Example: USDC.e
+# --- ERC20 Setup (example USDC.e) ---
+TOKEN_ADDRESS = Web3.to_checksum_address("0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664")
 ERC20_ABI = [
     {"constant": True, "inputs": [{"name": "_owner", "type": "address"}],
      "name": "balanceOf", "outputs": [{"name": "balance", "type": "uint256"}],
@@ -36,15 +37,13 @@ CLUSTER = set(Web3.to_checksum_address(a) for a in RAW_CLUSTER)
 
 
 def get_avax_balance(wallet: str) -> Decimal:
-    """Fetch native AVAX balance."""
     wei_balance = w3.eth.get_balance(wallet)
     return Decimal(w3.from_wei(wei_balance, "ether"))
 
 
 def get_token_balance(wallet: str) -> Decimal:
-    """Fetch ERC20 balance."""
     balance = token.functions.balanceOf(wallet).call()
-    return Decimal(balance) / Decimal(1e6)  # adjust decimals (USDC.e = 6 decimals)
+    return Decimal(balance) / Decimal(1e6)  # adjust for token decimals (USDC.e = 6)
 
 
 def cluster_balances():
@@ -74,16 +73,13 @@ def cluster_balances():
 def scan_recent_transfers(start_block: int, end_block: int):
     """Scan ERC20 transfers involving the cluster."""
     print(f"\n--- Transfers from block {start_block} to {end_block} ---")
-    logs = w3.eth.get_logs({
-        "fromBlock": start_block,
-        "toBlock": end_block,
-        "address": TOKEN_ADDRESS
-    })
+
+    transfer_event = token.events.Transfer()
+    logs = transfer_event.get_logs(from_block=start_block, to_block=end_block)
 
     trades = []
     for log in logs:
-        decoded = token.events.Transfer().process_log(log)
-        f, t, v = decoded['args']['from'], decoded['args']['to'], decoded['args']['value']
+        f, t, v = log['args']['from'], log['args']['to'], log['args']['value']
         v_adj = Decimal(v) / Decimal(1e6)  # adjust decimals
 
         if f in CLUSTER or t in CLUSTER:
@@ -99,7 +95,6 @@ if __name__ == "__main__":
     # Transfers in last 500 blocks
     latest_block = w3.eth.block_number
     scan_recent_transfers(latest_block - 500, latest_block)
-
 
 # from decimal import Decimal, getcontext
 # from web3.middleware import ExtraDataToPOAMiddleware
