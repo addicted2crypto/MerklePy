@@ -147,7 +147,7 @@ def cluster_report():
         print(f"💵 Token value ≈ {token_value:.3f} AVAX (at {price_native} AVAX/token)")
 
     if deployer:
-        print(f"\n📜 Token deployer: {deployer}")
+        print(f"\n Token deployer: {deployer}")
         print(f"   Tx: {tx_hash}")
         print(f"   Block: {creation_block}")
 
