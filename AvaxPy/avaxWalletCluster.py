@@ -141,7 +141,7 @@ def cluster_report():
     for w, avax, tok in balances:
         print(f"{w[:6]}...{w[-4:]} | AVAX: {avax:.3f} | Token: {tok:.3f}")
 
-    print(f"\n💰 Totals: AVAX={total_avax:.3f}, Token={total_token:.3f}")
+    print(f"\n💰 Totals: AVAX={total_avax:.3f}  ERC20 Tokens={total_token:.3f}")
     if price_native:
         token_value = total_token * price_native
         print(f"💵 Token value ≈ {token_value:.3f} AVAX (at {price_native} AVAX/token)")
