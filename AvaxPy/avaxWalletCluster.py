@@ -17,6 +17,14 @@ RAW_CLUSTER = [
     "0x2Fe09e93aCbB8B0dA86C394335b8A92d3f5E273e",
     "0x2eE647714bF12c5B085B9aeD44f559825A57b9dF",
     "0x139d124813afCA73D7d71354bFe46DB3dA59702B",
+    "0xa3cda653810350b18d3956aaf6b369cf68933073",
+    "0xF2bd61e529c83722d54d9CD5298037256890fb19",
+    "0x6dccb7CA18553c5664e8fc31672d0377ADf910b1",
+    "0x49dcf8e78c2a6118ab09c9a771e2aa0b50648780",
+    "0x239f8241fd512938DaB29C707196fA1Abff3D22C",
+    "0xa648FF555Cc5423e7EF0dE425fEB8B6c4155815b"
+
+
 ]
 
 
@@ -139,12 +147,12 @@ def cluster_report():
 
     balances.sort(key=lambda x: x[2], reverse=True)
     for w, avax, tok in balances:
-        print(f"{w[:6]}...{w[-4:]} | AVAX: {avax:.3f} | Token: {tok:.3f}")
+        print(f"{w[:6]}...{w[-4:]} | AVAX: {avax:.2f} | Token: {tok:.2f}")
 
-    print(f"\n💰 Totals: AVAX={total_avax:.3f}  ERC20 Tokens={total_token:.3f}")
+    print(f"\n💰 Totals: AVAX={total_avax:.2f}  ERC20 Tokens={total_token:.2f}")
     if price_native:
         token_value = total_token * price_native
-        print(f"💵 Token value ≈ {token_value:.3f} AVAX (at {price_native} AVAX/token)")
+        print(f"💵 Token value ≈ {token_value:.2f} AVAX (at {price_native} AVAX/token)")
 
     if deployer:
         print(f"\n Token deployer: {deployer}")
