@@ -153,7 +153,7 @@ def cluster_report():
     print(f"\n💰 Totals: AVAX={total_avax:.2f}  ERC20 Tokens={total_token:.2f}")
     if price_native:
         token_value = total_token * price_native
-        print(f"💵 Token value ≈ {token_value:.2f} AVAX (at {price_native} AVAX/token)")
+        print(f"💵 Token value ≈ {token_value:.2f} AVAX (at {price_native} AVAX per token)")
 
     if deployer:
         print(f"\n Token deployer: {deployer}")
