@@ -158,7 +158,7 @@ def cluster_report():
     if deployer:
         print(f"\n Token deployer: {deployer}")
         print(f"   Tx: {tx_hash}")
-        print(f"   Block: {creation_block}")
+        print(f"   Block #: {creation_block}")
 
 
 if __name__ == "__main__":
