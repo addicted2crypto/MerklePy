@@ -174,7 +174,7 @@ def cluster_transactions(start_block: int, end_block: int):
 
     # 1. ERC20 transfers
     transfer_event = token_contract.events.Transfer
-    logs = transfer_event().get_logs(fromBlock=start_block, toBlock=end_block)
+    logs = transfer_event().get_logs(from_block=start_block, to_block=end_block)
 
     for log in logs:
         from_addr = log["args"]["from"]
