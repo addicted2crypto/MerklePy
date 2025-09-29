@@ -1,6 +1,6 @@
 import logging
 from decimal import Decimal
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
 import requests
 from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
@@ -22,12 +22,15 @@ RAW_CLUSTER = [
     "0xa648FF555Cc5423e7EF0dE425fEB8B6c4155815b",
     "0xF8d4dD1854bB60950305Af12Fd72B7a547734b12",
 ]
-
 DEXSCREENER_TOKEN_URL = "https://api.dexscreener.com/latest/dex/tokens/{}"
 
+
+# --- Setup logging ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+
+# --- Web3 ---
 w3 = Web3(Web3.HTTPProvider(AVAX_RPC_URL))
 w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
@@ -38,7 +41,8 @@ if not w3.is_connected():
 TOKEN_ADDRESS = Web3.to_checksum_address(TOKEN_ADDRESS)
 CLUSTER = [Web3.to_checksum_address(a) for a in RAW_CLUSTER]
 
-# --- Minimal ERC20 ABI ---
+
+# --- ERC20 Minimal ABI ---
 ERC20_MIN_ABI = [
     {
         "constant": True,
@@ -132,8 +136,36 @@ def find_contract_creation(token_addr: str) -> Tuple[Optional[str], Optional[str
     return None, None, creation_block
 
 
+# --- Interactive wallet adding ---
+def add_wallets_interactively():
+    print("\n--- Add Wallets ---")
+    print("Paste one or more wallet addresses separated by commas.")
+    print("Leave blank and press Enter when done.\n")
+
+    while True:
+        user_input = input("➕ Add wallets: ").strip()
+        if not user_input:
+            break
+
+        new_wallets = [w.strip() for w in user_input.split(",") if w.strip()]
+        for w in new_wallets:
+            try:
+                cs = Web3.to_checksum_address(w)
+                if cs not in CLUSTER:
+                    CLUSTER.append(cs)
+                    print(f"✅ Added {cs}")
+                else:
+                    print(f"⚠️ Already in cluster: {cs}")
+            except Exception as e:
+                print(f"❌ Invalid address {w}: {e}")
+
+    print("\nCurrent cluster wallets:")
+    for w in CLUSTER:
+        print(" ", w)
+
+
 # --- Cluster balance reporting ---
-def cluster_report(cluster: List[str]):
+def cluster_report():
     decimals = get_token_decimals(token_contract)
     price_native = get_token_price_in_avax_dexscreener(TOKEN_ADDRESS)
     deployer, tx_hash, creation_block = find_contract_creation(TOKEN_ADDRESS)
@@ -142,7 +174,7 @@ def cluster_report(cluster: List[str]):
 
     print("\n--- Cluster Balances ---")
     balances = []
-    for wallet in cluster:
+    for wallet in CLUSTER:
         avax = get_avax_balance(wallet)
         token = get_token_balance(token_contract, wallet, decimals)
         balances.append((wallet, avax, token))
@@ -153,65 +185,64 @@ def cluster_report(cluster: List[str]):
     for w, avax, tok in balances:
         print(f"{w[:6]}...{w[-4:]} | AVAX: {avax:.2f} | Token: {tok:.2f}")
 
-    print(f"\n💰 Totals: AVAX={total_avax:.2f}  ERC20 Tokens={total_token:.2f}")
+    print(f"\n💰 Totals: AVAX= {total_avax:.2f}  ERC20 Tokens= {total_token:.2f}")
     if price_native:
         token_value = total_token * price_native
         print(f"💵 Token value ≈ {token_value:.2f} AVAX (at {price_native} AVAX per token)")
 
     if deployer:
-        print(f"\n Token deployer: {deployer}")
+        print(f"\n📜 Token deployer: {deployer}")
         print(f"   Tx: {tx_hash}")
         print(f"   Block #: {creation_block}")
 
 
-# --- Cluster transaction expansion ---
-def expand_cluster(start_block: int, end_block: int, cluster: List[str], min_links: int = 3) -> List[str]:
-    """Look for new wallets that interact frequently with the cluster."""
+# --- Cluster transaction links (ERC20 + AVAX transfers) ---
+def cluster_transactions(start_block: int, end_block: int):
+    print("\n--- Cluster Transaction Links ---")
     interactions = {}
-    new_wallets = set()
 
     transfer_event = token_contract.events.Transfer
-    step = 2000  # safe margin under 2048
+    max_chunk = 2000  # avoid RPC limit
 
-    for chunk_start in range(start_block, end_block + 1, step):
-        chunk_end = min(chunk_start + step - 1, end_block)
+    # ERC20 transfers in chunks
+    for chunk_start in range(start_block, end_block + 1, max_chunk):
+        chunk_end = min(chunk_start + max_chunk - 1, end_block)
         try:
             logs = transfer_event().get_logs(from_block=chunk_start, to_block=chunk_end)
         except Exception as e:
-            logger.warning("Log fetch failed for %d–%d: %s", chunk_start, chunk_end, e)
+            logger.warning("Log fetch failed for %s-%s: %s", chunk_start, chunk_end, e)
             continue
 
         for log in logs:
-            from_addr = Web3.to_checksum_address(log["args"]["from"])
-            to_addr = Web3.to_checksum_address(log["args"]["to"])
+            from_addr = log["args"]["from"]
+            to_addr = log["args"]["to"]
+            if from_addr in CLUSTER and to_addr in CLUSTER:
+                key = tuple(sorted([from_addr, to_addr]))
+                interactions[key] = interactions.get(key, 0) + 1
 
-            if from_addr in cluster and to_addr not in cluster:
-                interactions[to_addr] = interactions.get(to_addr, 0) + 1
-            elif to_addr in cluster and from_addr not in cluster:
-                interactions[from_addr] = interactions.get(from_addr, 0) + 1
+    # Native AVAX transfers in chunks
+    for chunk_start in range(start_block, end_block + 1, max_chunk):
+        chunk_end = min(chunk_start + max_chunk - 1, end_block)
+        for block_num in range(chunk_start, chunk_end + 1):
+            block = w3.eth.get_block(block_num, full_transactions=True)
+            for tx in block.transactions:
+                if tx["from"] in CLUSTER and tx["to"] in CLUSTER:
+                    key = tuple(sorted([tx["from"], tx["to"]]))
+                    interactions[key] = interactions.get(key, 0) + 1
 
-    for wallet, count in interactions.items():
-        if count >= min_links:
-            new_wallets.add(wallet)
+    if not interactions:
+        print("📊 No transfers between cluster wallets in this block range.")
+        return
 
-    return list(new_wallets)
+    total_transfers = sum(interactions.values())
+    for (a, b), count in interactions.items():
+        prob = count / total_transfers
+        print(f"{a[:6]}...{a[-4:]} ↔ {b[:6]}...{b[-4:]} : {prob:.2%} likelihood")
 
 
 # --- Main ---
 if __name__ == "__main__":
+    add_wallets_interactively()
+    cluster_report()
     latest_block = w3.eth.block_number
-
-    # Start with initial cluster
-    cluster = CLUSTER[:]
-
-    # Print initial balances
-    cluster_report(cluster)
-
-    # Try expanding cluster
-    new_wallets = expand_cluster(latest_block - 5000, latest_block, cluster)
-    if new_wallets:
-        print(f"\n✨ Expanded cluster with {len(new_wallets)} new wallets")
-        cluster.extend(new_wallets)
-        cluster_report(cluster)
-    else:
-        print("\nNo new wallets met expansion threshold.")
+    cluster_transactions(latest_block - 2000, latest_block)  # last ~2k blocks

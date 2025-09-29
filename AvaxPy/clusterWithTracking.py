@@ -20,7 +20,7 @@ RAW_CLUSTER = [
 ]
 
 
-BLOCK_WINDOW = 50_000
+
 EARLY_BUYER_LIMIT = 15
 
 DEXSCREENER_TOKEN_URL = "https://api.dexscreener.com/latest/dex/tokens/{}"
