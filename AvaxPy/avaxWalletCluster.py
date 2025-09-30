@@ -202,7 +202,7 @@ def cluster_transactions(start_block: int, end_block: int):
     interactions = {}
 
     transfer_event = token_contract.events.Transfer
-    max_chunk = 2000  # avoid RPC limit
+    max_chunk = 200  # avoid RPC limit
 
     # ERC20 transfers in chunks
     for chunk_start in range(start_block, end_block + 1, max_chunk):
@@ -239,8 +239,7 @@ def cluster_transactions(start_block: int, end_block: int):
         prob = count / total_transfers
         print(f"{a[:6]}...{a[-4:]} ↔ {b[:6]}...{b[-4:]} : {prob:.2%} likelihood")
 
-
-# --- Main ---
+-
 if __name__ == "__main__":
     add_wallets_interactively()
     cluster_report()
