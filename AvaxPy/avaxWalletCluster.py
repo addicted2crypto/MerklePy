@@ -1,4 +1,5 @@
 import logging
+import json
 from decimal import Decimal
 from typing import Tuple, Optional
 import requests
@@ -9,6 +10,9 @@ from web3.middleware import ExtraDataToPOAMiddleware
 # --- Config ---
 AVAX_RPC_URL = "https://api.avax.network/ext/bc/C/rpc"
 TOKEN_ADDRESS = "0xC654721fBf1F374fd9FfA3385Bba2F4932A6af55"
+DATA_FILE = "wallet_labels.json"
+MAX_RETRIES = 3
+RETRY_DELAY = 1
 
 RAW_CLUSTER = [
     "0x2Fe09e93aCbB8B0dA86C394335b8A92d3f5E273e",
@@ -33,6 +37,8 @@ logger = logging.getLogger(__name__)
 # --- Web3 ---
 w3 = Web3(Web3.HTTPProvider(AVAX_RPC_URL))
 w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+logger.error("RPC connection failed")
+raise SystemExit(1)
 
 if not w3.is_connected():
     logger.error("Failed to connect to AVAX RPC at %s", AVAX_RPC_URL)
@@ -75,6 +81,15 @@ token_contract = w3.eth.contract(address=TOKEN_ADDRESS, abi=ERC20_MIN_ABI)
 
 
 # --- Helpers ---
+def retry_call(func, *args, **kwargs):
+    for attempt in range(MAX_RETRIES):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if attempt == MAX_RETRIES -1:
+                logger.error(f"Failed after {MAX_RETRIES} attempts: {e}")
+                return None
+                time.sleep(RETRY_DELAY * (2 ** attempt))
 def get_token_decimals(contract) -> int:
     try:
         return int(contract.functions.decimals().call())
