@@ -90,6 +90,8 @@ def retry_call(func, *args, **kwargs):
                 logger.error(f"Failed after {MAX_RETRIES} attempts: {e}")
                 return None
                 time.sleep(RETRY_DELAY * (2 ** attempt))
+
+
 def get_token_decimals(contract) -> int:
     try:
         return int(contract.functions.decimals().call())
@@ -120,7 +122,19 @@ def get_token_price_in_avax_dexscreener(token_addr: str) -> Optional[Decimal]:
     except Exception as e:
         logger.warning("Dexscreener price fetch failed: %s", e)
         return None
-
+def get_token_price() -> Optional[Decimal]:
+    try:
+        resp = requests.get(f"https://api.dexscreener.com/latest/dex/tokens/{TOKEN_ADDRESS}", timeout=10)
+        resp.raise_for_status()
+        pairs = resp.json().get("pairs", [])
+        for p in pairs:
+            if "priceNative" in p:
+                return Decimal(str(p["priceNative"]))
+        return None
+    except Exception as e:
+        logger.warning("Dexscreener price fetch failed: %s", e)
+        return None
+                    
 
 def find_contract_creation(token_addr: str) -> Tuple[Optional[str], Optional[str], Optional[int]]:
     token_addr = Web3.to_checksum_address(token_addr)
@@ -254,7 +268,7 @@ def cluster_transactions(start_block: int, end_block: int):
         prob = count / total_transfers
         print(f"{a[:6]}...{a[-4:]} ↔ {b[:6]}...{b[-4:]} : {prob:.2%} likelihood")
 
--
+
 if __name__ == "__main__":
     add_wallets_interactively()
     cluster_report()
