@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Dict, Optional, Set
 import time
+from collections import defaultdict
 
 class ArenaProxyProfitTracker:
     """
@@ -31,6 +32,18 @@ class ArenaProxyProfitTracker:
             'summary': {},
             'timestamp': datetime.now().isoformat()
         }
+
+        # Realtime monitoring state
+        self.deployer_stats = defaultdict(lambda: {
+            'token_count': 0,
+            'total_profit_avax': 0.0,
+            'total_profit_usd': 0.0,
+            'flagged': False,
+            'last_deployment': None,
+            'tokens': []
+        })
+        self.last_processed_block = 0
+        self.flagged_deployers = set()
 
     def get_wallet_transactions(self, wallet_address: str, start_block: int = 0) -> List[Dict]:
         """Get all transactions for a wallet address"""
@@ -852,60 +865,331 @@ class ArenaProxyProfitTracker:
             'min_buy_limit': min_buy_limit
         }
 
+    def get_latest_block_number(self) -> int:
+        """Get the latest block number from the blockchain"""
+        try:
+            return self.w3.eth.block_number
+        except Exception as e:
+            print(f"[ERROR] Failed to get latest block: {e}")
+            return 0
+
+    def scan_recent_deployments(self, from_block: int, to_block: int) -> List[Dict]:
+        """
+        Scan for recent token deployments through factory contracts
+        Returns list of deployments with deployer addresses
+        """
+        deployments = []
+
+        for factory_addr in self.factory_addresses:
+            try:
+                url = "https://api.snowscan.io/api"
+                params = {
+                    'module': 'account',
+                    'action': 'txlist',
+                    'address': factory_addr,
+                    'startblock': from_block,
+                    'endblock': to_block,
+                    'sort': 'asc',
+                    'apikey': self.api_key
+                }
+                response = requests.get(url, params=params, timeout=15)
+                data = response.json()
+
+                if data['status'] == '1' and data['result']:
+                    for tx in data['result']:
+                        # Skip failed transactions
+                        if tx.get('isError') == '1':
+                            continue
+
+                        deployer_addr = Web3.to_checksum_address(tx['from'])
+                        tx_hash = tx['hash']
+                        block_number = int(tx['blockNumber'])
+                        timestamp = int(tx['timeStamp'])
+
+                        # Try to find created contract address
+                        try:
+                            receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+                            contract_addr = None
+
+                            # Check receipt logs for contract creation
+                            if receipt and receipt.logs:
+                                for log in receipt.logs:
+                                    if len(log.topics) > 1:
+                                        potential_addr = log.topics[1].hex()
+                                        if len(potential_addr) >= 66:
+                                            addr_hex = '0x' + potential_addr[-40:]
+                                            try:
+                                                contract_addr = Web3.to_checksum_address(addr_hex)
+                                                # Verify it has code
+                                                if len(self.w3.eth.get_code(contract_addr)) > 0:
+                                                    break
+                                            except Exception:
+                                                continue
+
+                            if contract_addr:
+                                deployments.append({
+                                    'deployer': deployer_addr,
+                                    'contract_address': contract_addr,
+                                    'tx_hash': tx_hash,
+                                    'block_number': block_number,
+                                    'timestamp': timestamp,
+                                    'factory_address': factory_addr
+                                })
+
+                        except Exception as e:
+                            # Skip this transaction if we can't get receipt
+                            continue
+
+                time.sleep(0.2)  # Rate limiting
+
+            except Exception as e:
+                print(f"[ERROR] Failed to scan factory {factory_addr[:10]}...: {e}")
+                continue
+
+        return deployments
+
+    def update_deployer_stats(self, deployer: str, token_address: str,
+                             block_number: int, timestamp: int):
+        """
+        Update statistics for a deployer and calculate their profit
+        """
+        deployer = Web3.to_checksum_address(deployer)
+
+        # Update deployment count
+        self.deployer_stats[deployer]['token_count'] += 1
+        self.deployer_stats[deployer]['last_deployment'] = datetime.fromtimestamp(timestamp).isoformat()
+        self.deployer_stats[deployer]['tokens'].append(token_address)
+
+        # Quick profit analysis for this token
+        try:
+            analysis = self.analyze_token_trades(deployer, token_address, block_number)
+
+            self.deployer_stats[deployer]['total_profit_avax'] += analysis['profit_avax']
+            self.deployer_stats[deployer]['total_profit_usd'] += analysis['profit_usd']
+
+        except Exception as e:
+            print(f"    [WARNING] Could not analyze profit for {token_address[:10]}...: {e}")
+
+    def check_and_flag_deployer(self, deployer: str, min_tokens: int = 3,
+                                min_profit_avax: float = 1.0):
+        """
+        Check if a deployer meets flagging criteria and flag them if so
+        Prints realtime alert when flagged
+        """
+        deployer = Web3.to_checksum_address(deployer)
+        stats = self.deployer_stats[deployer]
+
+        # Check if already flagged
+        if stats['flagged']:
+            return False
+
+        # Check if meets criteria
+        if stats['token_count'] >= min_tokens:
+            stats['flagged'] = True
+            self.flagged_deployers.add(deployer)
+
+            # Print realtime alert
+            print(f"\n{'='*70}")
+            print(f"🚨 FLAGGED DEPLOYER DETECTED!")
+            print(f"{'='*70}")
+            print(f"  Address:         {deployer}")
+            print(f"  Tokens Deployed: {stats['token_count']}")
+            print(f"  Total Profit:    {stats['total_profit_avax']:.4f} AVAX")
+            print(f"                   ${stats['total_profit_usd']:.2f} USD")
+            print(f"  Last Deployment: {stats['last_deployment']}")
+            print(f"  Avg Profit/Token: {stats['total_profit_avax']/stats['token_count']:.4f} AVAX")
+            print(f"{'='*70}\n")
+
+            return True
+
+        return False
+
+    def monitor_realtime(self, poll_interval: int = 30, min_tokens_to_flag: int = 3,
+                        min_profit_avax: float = 1.0):
+        """
+        Monitor the blockchain in realtime for new token deployments
+        Flag accounts that deploy many tokens and print their profits
+
+        Args:
+            poll_interval: Seconds between blockchain scans (default: 30)
+            min_tokens_to_flag: Minimum tokens deployed to flag account (default: 3)
+            min_profit_avax: Minimum profit in AVAX to flag (default: 1.0)
+        """
+        print(f"\n{'#'*70}")
+        print(f"# REALTIME ARENA DEPLOYER MONITOR")
+        print(f"# Poll Interval: {poll_interval}s | Min Tokens: {min_tokens_to_flag}")
+        print(f"{'#'*70}\n")
+
+        # Initialize starting block
+        if self.last_processed_block == 0:
+            self.last_processed_block = self.get_latest_block_number()
+            print(f"[INIT] Starting from block {self.last_processed_block}")
+
+        print(f"[MONITOR] Watching for deployments through Arena factories...")
+        print(f"[MONITOR] Press Ctrl+C to stop\n")
+
+        try:
+            while True:
+                current_block = self.get_latest_block_number()
+
+                if current_block > self.last_processed_block:
+                    print(f"[SCAN] Blocks {self.last_processed_block + 1} → {current_block}... ", end='')
+
+                    # Scan for new deployments
+                    deployments = self.scan_recent_deployments(
+                        self.last_processed_block + 1,
+                        current_block
+                    )
+
+                    if deployments:
+                        print(f"Found {len(deployments)} deployment(s)")
+
+                        for deployment in deployments:
+                            deployer = deployment['deployer']
+                            token = deployment['contract_address']
+                            block = deployment['block_number']
+                            timestamp = deployment['timestamp']
+
+                            print(f"  ⚡ New Token: {token[:10]}... by {deployer[:10]}...")
+
+                            # Update deployer stats
+                            self.update_deployer_stats(deployer, token, block, timestamp)
+
+                            # Check if deployer should be flagged
+                            self.check_and_flag_deployer(
+                                deployer,
+                                min_tokens=min_tokens_to_flag,
+                                min_profit_avax=min_profit_avax
+                            )
+
+                            # Print current stats for this deployer
+                            stats = self.deployer_stats[deployer]
+                            print(f"     └─ Deployer Stats: {stats['token_count']} tokens, "
+                                  f"{stats['total_profit_avax']:.2f} AVAX profit")
+
+                    else:
+                        print("No deployments")
+
+                    self.last_processed_block = current_block
+
+                # Wait before next poll
+                time.sleep(poll_interval)
+
+        except KeyboardInterrupt:
+            print(f"\n\n[STOPPED] Monitor stopped by user")
+            self.print_monitoring_summary()
+
+    def print_monitoring_summary(self):
+        """Print summary of all deployers monitored during realtime session"""
+        print(f"\n{'#'*70}")
+        print(f"# MONITORING SESSION SUMMARY")
+        print(f"{'#'*70}\n")
+
+        print(f"Total Unique Deployers: {len(self.deployer_stats)}")
+        print(f"Flagged Deployers: {len(self.flagged_deployers)}\n")
+
+        if self.deployer_stats:
+            # Sort deployers by token count
+            sorted_deployers = sorted(
+                self.deployer_stats.items(),
+                key=lambda x: x[1]['token_count'],
+                reverse=True
+            )
+
+            print(f"{'='*70}")
+            print("TOP DEPLOYERS (by token count):")
+            print(f"{'='*70}\n")
+
+            for i, (deployer, stats) in enumerate(sorted_deployers[:10], 1):
+                flag = "🚨 FLAGGED" if stats['flagged'] else ""
+                print(f"{i}. {deployer} {flag}")
+                print(f"   Tokens: {stats['token_count']} | "
+                      f"Profit: {stats['total_profit_avax']:.4f} AVAX "
+                      f"(${stats['total_profit_usd']:.2f} USD)")
+                if stats['last_deployment']:
+                    print(f"   Last: {stats['last_deployment']}")
+                print()
+
+        print(f"{'#'*70}\n")
+
 
 # Main execution
 if __name__ == "__main__":
     # Configuration
     RPC_URL = "https://api.avax.network/ext/bc/C/rpc"
-    API_KEY = "YOUR_SNOWTRACE_API_KEY"  # Replace with your actual API key
+    API_KEY = "YOUR_SNOWSCAN_API_KEY"  # Replace with your actual API key
     ARENA_PROXY = "0xc605c2cf66ee98ea925b1bb4fea584b71c00cc4c"
-
-    # List of target wallets to analyze
-    # NOTE: Last wallet (0x0eead2...) has ~20 factory-deployed tokens in last 4 hours - good test case
-    TARGET_WALLETS = [
-        "0x2Fe09e93aCbB8B0dA86C394335b8A92d3f5E273e",
-        "0x2eE647714bF12c5B085B9aeD44f559825A57b9dF",
-        "0x139d124813afCA73D7d71354bFe46DB3dA59702B",
-        "0xa3cda653810350b18d3956aaf6b369cf68933073",
-        "0xF2bd61e529c83722d54d9CD5298037256890fb19",
-        "0x6dccb7CA18553c5664e8fc31672d0377ADf910b1",
-        "0x49dcf8e78c2a6118ab09c9a771e2aa0b50648780",
-        "0x239f8241fd512938DaB29C707196fA1Abff3D22C",
-        "0xa648FF555Cc5423e7EF0dE425fEB8B6c4155815b",
-        "0xF8d4dD1854bB60950305Af12Fd72B7a547734b12",
-        "0x0eead2dafcf656671c3adec00c1b7edf968338c0",  # Test wallet with factory deployments
-    ]
 
     # Initialize tracker
     tracker = ArenaProxyProfitTracker(RPC_URL, API_KEY, ARENA_PROXY)
 
-    # Analyze wallets
-    results = tracker.analyze_multiple_wallets(TARGET_WALLETS)
+    # Choose mode: 'realtime' or 'historical'
+    MODE = 'realtime'  # Change to 'historical' for batch analysis
 
-    # Export results
-    tracker.export_results()
+    if MODE == 'realtime':
+        # REALTIME MONITORING MODE
+        # Continuously monitor blockchain for new token deployments
+        # and flag accounts that deploy multiple tokens
+        print("\n[MODE] Realtime Monitoring")
+        print("[INFO] Starting continuous blockchain monitor...")
+        print("[INFO] This will watch for new token deployments and automatically")
+        print("[INFO] flag accounts that deploy multiple tokens.\n")
 
-    # Generate blacklist entries
-    print(f"\n{'='*70}")
-    print("BLACKLIST EVALUATION")
-    print(f"{'='*70}")
-    blacklist_entries = tracker.generate_blacklist_entries(
-        min_tokens=2500,  # Will watch this as cur half of 5000 since we're checking 2 wallets
-        min_profit_usd=50.0   # Minimum USD profit to blacklist
-    )
+        tracker.monitor_realtime(
+            poll_interval=30,        # Check every 30 seconds
+            min_tokens_to_flag=3,    # Flag after 3+ tokens deployed
+            min_profit_avax=1.0      # Minimum profit threshold (not used for flagging yet)
+        )
 
-    # Check for buy limit violations (>5 AVAX buys that were dumped)
-    buy_violations = tracker.check_buy_limit_violations(min_buy_limit=5.0)
+    else:
+        # HISTORICAL ANALYSIS MODE
+        # Analyze specific wallets for historical token deployments
 
-    # Print detailed reports for each wallet
-    for wallet in TARGET_WALLETS:
-        tracker.print_detailed_token_report(wallet, top_n=10)
+        # List of target wallets to analyze
+        TARGET_WALLETS = [
+            "0x2Fe09e93aCbB8B0dA86C394335b8A92d3f5E273e",
+            "0x2eE647714bF12c5B085B9aeD44f559825A57b9dF",
+            "0x139d124813afCA73D7d71354bFe46DB3dA59702B",
+            "0xa3cda653810350b18d3956aaf6b369cf68933073",
+            "0xF2bd61e529c83722d54d9CD5298037256890fb19",
+            "0x6dccb7CA18553c5664e8fc31672d0377ADf910b1",
+            "0x49dcf8e78c2a6118ab09c9a771e2aa0b50648780",
+            "0x239f8241fd512938DaB29C707196fA1Abff3D22C",
+            "0xa648FF555Cc5423e7EF0dE425fEB8B6c4155815b",
+            "0xF8d4dD1854bB60950305Af12Fd72B7a547734b12",
+            "0x0eead2dafcf656671c3adec00c1b7edf968338c0",
+        ]
 
-    print(f"\n{'='*70}")
-    print("ANALYSIS COMPLETE")
-    print(f"{'='*70}")
-    print(f"\nBlacklist Entries: {len(blacklist_entries)}")
-    print(f"Buy Limit Violations: {buy_violations['total_violations']}")
-    print(f"\nNote: Dexscreener bonding check not yet implemented.")
-    print(f"      Currently flagging dumps that recovered 80%+ of buy value.")
-    print(f"{'='*70}")
+        print("\n[MODE] Historical Analysis")
+        print(f"[INFO] Analyzing {len(TARGET_WALLETS)} wallets...\n")
+
+        # Analyze wallets
+        results = tracker.analyze_multiple_wallets(TARGET_WALLETS)
+
+        # Export results
+        tracker.export_results()
+
+        # Generate blacklist entries
+        print(f"\n{'='*70}")
+        print("BLACKLIST EVALUATION")
+        print(f"{'='*70}")
+        blacklist_entries = tracker.generate_blacklist_entries(
+            min_tokens=2500,
+            min_profit_usd=50.0
+        )
+
+        # Check for buy limit violations (>5 AVAX buys that were dumped)
+        buy_violations = tracker.check_buy_limit_violations(min_buy_limit=5.0)
+
+        # Print detailed reports for each wallet
+        for wallet in TARGET_WALLETS:
+            tracker.print_detailed_token_report(wallet, top_n=10)
+
+        print(f"\n{'='*70}")
+        print("ANALYSIS COMPLETE")
+        print(f"{'='*70}")
+        print(f"\nBlacklist Entries: {len(blacklist_entries)}")
+        print(f"Buy Limit Violations: {buy_violations['total_violations']}")
+        print(f"\nNote: Dexscreener bonding check not yet implemented.")
+        print(f"      Currently flagging dumps that recovered 80%+ of buy value.")
+        print(f"{'='*70}")
