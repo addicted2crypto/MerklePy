@@ -8,3 +8,8 @@
 .md
 .*md
 .*txt
+.pyc
+.json
+*.json
+*.csv
+*.pyc
