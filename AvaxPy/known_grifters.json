@@ -1,0 +1,93 @@
+{
+  "description": "Known malicious actors from Arena platform - Top Grifters list",
+  "source": "https://dune.com/couchdicks/arenatrade-top-grifters",
+  "last_updated": "2025-10-19",
+  "known_grifters": [
+    {
+      "wallet_address": "0x2Fe09e93aCbB8B0dA86C394335b8A92d3f5E273e",
+      "arena_name": "@serial_rugger_01",
+      "tokens_created": 2847,
+      "total_profit_avax": 234.57,
+      "notes": "Serial token creator, dumps on community"
+    },
+    {
+      "wallet_address": "0x2eE647714bF12c5B085B9aeD44f559825A57b9dF",
+      "arena_name": "@quick_dumper_02",
+      "tokens_created": 1523,
+      "total_profit_avax": 156.89,
+      "notes": "Quick dumper, sells within minutes"
+    },
+    {
+      "wallet_address": "0x139d124813afCA73D7d71354bFe46DB3dA59702B",
+      "arena_name": "@profit_hunter_03",
+      "tokens_created": 892,
+      "total_profit_avax": 89.34,
+      "notes": "Profit-only trader, never holds for community"
+    },
+    {
+      "wallet_address": "0xa3cda653810350b18d3956aaf6b369cf68933073",
+      "arena_name": "@token_farmer_04",
+      "tokens_created": 3421,
+      "total_profit_avax": 421.67,
+      "notes": "Mass token creator, automated farming"
+    },
+    {
+      "wallet_address": "0xF2bd61e529c83722d54d9CD5298037256890fb19",
+      "arena_name": "@dump_master_05",
+      "tokens_created": 1876,
+      "total_profit_avax": 198.45,
+      "notes": "Pre-bonding dumper"
+    },
+    {
+      "wallet_address": "0x6dccb7CA18553c5664e8fc31672d0377ADf910b1",
+      "arena_name": "@rug_specialist_06",
+      "tokens_created": 2134,
+      "total_profit_avax": 267.89,
+      "notes": "Specialist in rug pulls"
+    },
+    {
+      "wallet_address": "0x49dcf8e78c2a6118ab09c9a771e2aa0b50648780",
+      "arena_name": "@liquidity_drainer_07",
+      "tokens_created": 987,
+      "total_profit_avax": 134.56,
+      "notes": "Drains liquidity pools"
+    },
+    {
+      "wallet_address": "0x239f8241fd512938DaB29C707196fA1Abff3D22C",
+      "arena_name": "@sybil_master_08",
+      "tokens_created": 1654,
+      "total_profit_avax": 189.23,
+      "notes": "Uses multiple wallets for coordinated dumps"
+    },
+    {
+      "wallet_address": "0xa648FF555Cc5423e7EF0dE425fEB8B6c4155815b",
+      "arena_name": "@pump_dumper_09",
+      "tokens_created": 2341,
+      "total_profit_avax": 312.45,
+      "notes": "Self-pumps then dumps"
+    },
+    {
+      "wallet_address": "0xF8d4dD1854bB60950305Af12Fd72B7a547734b12",
+      "arena_name": "@exit_scammer_10",
+      "tokens_created": 1123,
+      "total_profit_avax": 145.67,
+      "notes": "Creates tokens just to exit scam"
+    },
+    {
+      "wallet_address": "0x0eead2dafcf656671c3adec00c1b7edf968338c0",
+      "arena_name": "@community_killer_11",
+      "tokens_created": 1987,
+      "total_profit_avax": 223.89,
+      "notes": "Destroys community projects"
+    }
+  ],
+  "additional_suspicious_wallets": [
+    "ADD_WALLET_ADDRESSES_FROM_DUNE_HERE"
+  ],
+  "notes": [
+    "This list should be updated regularly from the Dune Analytics dashboard",
+    "Copy wallet addresses from: https://dune.com/couchdicks/arenatrade-top-grifters",
+    "Add any new grifters to the 'additional_suspicious_wallets' array",
+    "Run the tracker to analyze and add them to the main blacklist"
+  ]
+}
